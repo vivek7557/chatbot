@@ -1,4 +1,3 @@
-[deepseek_markdown_20251109_e2a5e2.md](https://github.com/user-attachments/files/23437800/deepseek_markdown_20251109_e2a5e2.md)
 # 🧠 ML Quiz Master
 
 An interactive Streamlit web application for learning Machine Learning, Statistics, and Mathematics through comprehensive quizzes.
