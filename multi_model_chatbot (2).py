@@ -1,6 +1,8 @@
 import streamlit as st
 import os
 from typing import Dict, List
+import requests
+import json
 
 # Optional imports with error handling
 try:
@@ -22,6 +24,9 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+# Ollama import
+OLLAMA_AVAILABLE = True  # Always available since it's HTTP-based
+
 
 class MultiModelChatbot:
     """
@@ -29,18 +34,21 @@ class MultiModelChatbot:
     - Claude (Anthropic)
     - GPT (OpenAI)
     - Gemini (Google)
+    - Ollama (Local models)
     """
     
     def __init__(self):
         self.conversation_history: Dict[str, List[Dict]] = {
             'claude': [],
             'gpt': [],
-            'gemini': []
+            'gemini': [],
+            'ollama': []
         }
         
         self.anthropic_client = None
         self.openai_client = None
         self.gemini_model = None
+        self.ollama_endpoint = "http://localhost:11434/api/chat"
         
     def setup_claude(self, api_key: str):
         """Initialize Claude client"""
@@ -148,6 +156,55 @@ class MultiModelChatbot:
         except Exception as e:
             return f"Error communicating with Gemini: {str(e)}\n\nPlease check:\n1. Your API key is valid\n2. You have enabled the Gemini API in Google Cloud\n3. Your quota is sufficient"
     
+    def chat_with_ollama(self, message: str, model: str = "llama3") -> str:
+        """Send message to Ollama and get response"""
+        try:
+            # Prepare the message history
+            messages = []
+            for msg in self.conversation_history['ollama']:
+                messages.append({
+                    "role": msg['role'],
+                    "content": msg['content']
+                })
+            
+            # Add the new message
+            messages.append({
+                "role": "user",
+                "content": message
+            })
+            
+            # Send request to Ollama
+            payload = {
+                "model": model,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7
+                }
+            }
+            
+            response = requests.post(self.ollama_endpoint, json=payload)
+            response.raise_for_status()
+            
+            data = response.json()
+            assistant_message = data['message']['content']
+            
+            # Update history
+            self.conversation_history['ollama'].append({
+                "role": "user",
+                "content": message
+            })
+            self.conversation_history['ollama'].append({
+                "role": "assistant",
+                "content": assistant_message
+            })
+            
+            return assistant_message
+        except requests.exceptions.ConnectionError:
+            return "Error: Could not connect to Ollama. Make sure Ollama is running on localhost:11434"
+        except Exception as e:
+            return f"Error communicating with Ollama: {str(e)}"
+    
     def chat(self, model_name: str, message: str) -> str:
         """Universal chat method"""
         if model_name.lower() == 'claude':
@@ -156,6 +213,8 @@ class MultiModelChatbot:
             return self.chat_with_gpt(message)
         elif model_name.lower() == 'gemini':
             return self.chat_with_gemini(message)
+        elif model_name.lower() == 'ollama':
+            return self.chat_with_ollama(message)
         else:
             return "Error: Unknown model"
     
@@ -172,15 +231,288 @@ class MultiModelChatbot:
         return self.conversation_history.get(model_name, [])
 
 
+# Enhanced CSS for enterprise visuals
+st.markdown("""
+<style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    /* Global Styles */
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* Main Background */
+    .stApp {
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+    }
+    
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    /* Header Styling */
+    .main-header {
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 32px;
+        margin-bottom: 30px;
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    
+    .header-icon {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    .main-title {
+        color: #ffffff;
+        font-size: 42px;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    .subtitle {
+        color: #c7b3ff;
+        font-size: 16px;
+        margin-top: 8px;
+    }
+    
+    /* Card Styles */
+    .glass-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 28px;
+        border: 1px solid rgba(255,255,255,0.18);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .glass-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+        border-color: rgba(255,255,255,0.3);
+    }
+    
+    .step-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+        backdrop-filter: blur(10px);
+        border-radius: 14px;
+        padding: 24px;
+        border: 1px solid rgba(255,255,255,0.15);
+        margin-bottom: 16px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .step-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+    }
+    
+    .section-title {
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-icon {
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 8px;
+        text-align: center;
+        line-height: 32px;
+        font-size: 18px;
+    }
+    
+    /* Input Styles */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > select {
+        background: rgba(255,255,255,0.08) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        border-radius: 10px !important;
+        padding: 12px !important;
+        font-size: 14px !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus,
+    .stSelectbox > div > div > select:focus {
+        background: rgba(255,255,255,0.12) !important;
+        border-color: rgba(102, 126, 234, 0.6) !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    }
+    
+    /* Button Styles */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 12px 24px !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4) !important;
+        text-transform: none !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 25px rgba(102, 126, 234, 0.6) !important;
+    }
+    
+    .stButton > button:active {
+        transform: translateY(0px) !important;
+    }
+    
+    /* Download Button */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 12px 24px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+    }
+    
+    /* Sidebar Styles */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(26, 11, 46, 0.95) 0%, rgba(45, 27, 105, 0.95) 100%);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    [data-testid="stSidebar"] .stTextInput > div > div > input {
+        background: rgba(255,255,255,0.06) !important;
+        border-color: rgba(255,255,255,0.1) !important;
+    }
+    
+    /* Success/Error Messages */
+    .stSuccess {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%) !important;
+        border-left: 4px solid #10b981 !important;
+        border-radius: 8px !important;
+        color: #d1fae5 !important;
+        backdrop-filter: blur(10px);
+    }
+    
+    .stError {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%) !important;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 8px !important;
+        color: #fecaca !important;
+        backdrop-filter: blur(10px);
+    }
+    
+    .stWarning {
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.2) 100%) !important;
+        border-left: 4px solid #fbbf24 !important;
+        border-radius: 8px !important;
+        color: #fef3c7 !important;
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Spinner */
+    .stSpinner > div {
+        border-top-color: #667eea !important;
+    }
+    
+    /* Divider */
+    hr {
+        border-color: rgba(255,255,255,0.1) !important;
+        margin: 30px 0 !important;
+    }
+    
+    /* Chat message styling */
+    .user-message {
+        background: rgba(102, 126, 234, 0.2) !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        margin: 8px 0 !important;
+    }
+    
+    .assistant-message {
+        background: rgba(118, 75, 162, 0.2) !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        margin: 8px 0 !important;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        color: #a78bfa;
+        font-size: 14px;
+        padding: 30px;
+        margin-top: 50px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    
+    /* Hide Streamlit Branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .main-title {
+            font-size: 28px;
+        }
+        .header-icon {
+            width: 48px;
+            height: 48px;
+            font-size: 28px;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
 def main():
     st.set_page_config(
-        page_title="Multi-Model AI Chatbot",
+        page_title="Enterprise Multi-Model AI Chatbot",
         page_icon="🤖",
         layout="wide"
     )
-    
-    st.title("🤖 Multi-Model AI Chatbot")
-    st.markdown("Chat with Claude, GPT, and Gemini in one place!")
     
     # Initialize session state
     if 'chatbot' not in st.session_state:
@@ -189,111 +521,144 @@ def main():
     if 'current_model' not in st.session_state:
         st.session_state.current_model = 'claude'
     
-    # Sidebar for configuration
-    with st.sidebar:
-        st.header("⚙️ Configuration")
-        
-        # Model availability status
-        st.subheader("Package Status")
-        st.write(f"{'✅' if ANTHROPIC_AVAILABLE else '❌'} Anthropic")
-        st.write(f"{'✅' if OPENAI_AVAILABLE else '❌'} OpenAI")
-        st.write(f"{'✅' if GEMINI_AVAILABLE else '❌'} Google AI")
-        
-        st.divider()
-        
-        # API Keys
-        st.subheader("API Keys")
-        
-        if ANTHROPIC_AVAILABLE:
-            claude_key = st.text_input("Claude API Key", type="password", key="claude_key")
-            if claude_key and st.session_state.chatbot.anthropic_client is None:
-                try:
-                    st.session_state.chatbot.setup_claude(claude_key)
-                    st.success("Claude configured!")
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-        
-        if OPENAI_AVAILABLE:
-            openai_key = st.text_input("OpenAI API Key", type="password", key="openai_key")
-            if openai_key:
-                if st.session_state.chatbot.openai_client is None:
+    # Main Header
+    st.markdown("""
+    <div class='main-header'>
+        <div style='display: flex; align-items: center; gap: 20px;'>
+            <div class='header-icon'>🤖</div>
+            <div>
+                <h1 class='main-title'>Enterprise AI Chatbot</h1>
+                <p class='subtitle'>Chat with Claude, GPT, Gemini, and Ollama in one place!</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create columns for layout
+    col1, col2 = st.columns([1, 4])
+    
+    with col1:
+        with st.container():
+            st.markdown("""
+            <div class='glass-card'>
+                <div class='section-title'>
+                    <span class='section-icon'>⚙️</span>
+                    Configuration
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Model availability status
+            st.subheader("Package Status")
+            st.write(f"{'✅' if ANTHROPIC_AVAILABLE else '❌'} Anthropic")
+            st.write(f"{'✅' if OPENAI_AVAILABLE else '❌'} OpenAI")
+            st.write(f"{'✅' if GEMINI_AVAILABLE else '❌'} Google AI")
+            st.write(f"{'✅' if OLLAMA_AVAILABLE else '❌'} Ollama")
+            
+            st.divider()
+            
+            # API Keys
+            st.subheader("API Keys")
+            
+            if ANTHROPIC_AVAILABLE:
+                claude_key = st.text_input("Claude API Key", type="password", key="claude_key")
+                if claude_key and st.session_state.chatbot.anthropic_client is None:
                     try:
-                        st.session_state.chatbot.setup_gpt(openai_key)
-                        st.success("✅ GPT configured!")
+                        st.session_state.chatbot.setup_claude(claude_key)
+                        st.success("Claude configured!")
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        st.error(f"Error: {str(e)}")
+            
+            if OPENAI_AVAILABLE:
+                openai_key = st.text_input("OpenAI API Key", type="password", key="openai_key")
+                if openai_key:
+                    if st.session_state.chatbot.openai_client is None:
+                        try:
+                            st.session_state.chatbot.setup_gpt(openai_key)
+                            st.success("✅ GPT configured!")
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+                else:
+                    st.info("💡 Get your API key from: https://platform.openai.com/api-keys")
+            
+            if GEMINI_AVAILABLE:
+                gemini_key = st.text_input("Gemini API Key", type="password", key="gemini_key")
+                if gemini_key and st.session_state.chatbot.gemini_model is None:
+                    try:
+                        st.session_state.chatbot.setup_gemini(gemini_key)
+                        st.success("Gemini configured!")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+            
+            st.divider()
+            
+            # Model selection
+            st.subheader("Select Model")
+            available_models = []
+            if st.session_state.chatbot.anthropic_client:
+                available_models.append('claude')
+            if st.session_state.chatbot.openai_client:
+                available_models.append('gpt')
+            if st.session_state.chatbot.gemini_model:
+                available_models.append('gemini')
+            available_models.append('ollama')  # Always available
+            
+            if available_models:
+                st.session_state.current_model = st.selectbox(
+                    "Choose AI Model",
+                    available_models,
+                    index=available_models.index(st.session_state.current_model) 
+                        if st.session_state.current_model in available_models else 0
+                )
             else:
-                st.info("💡 Get your API key from: https://platform.openai.com/api-keys")
-        
-        if GEMINI_AVAILABLE:
-            gemini_key = st.text_input("Gemini API Key", type="password", key="gemini_key")
-            if gemini_key and st.session_state.chatbot.gemini_model is None:
-                try:
-                    st.session_state.chatbot.setup_gemini(gemini_key)
-                    st.success("Gemini configured!")
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-        
-        st.divider()
-        
-        # Model selection
-        st.subheader("Select Model")
-        available_models = []
-        if st.session_state.chatbot.anthropic_client:
-            available_models.append('claude')
-        if st.session_state.chatbot.openai_client:
-            available_models.append('gpt')
-        if st.session_state.chatbot.gemini_model:
-            available_models.append('gemini')
-        
-        if available_models:
-            st.session_state.current_model = st.selectbox(
-                "Choose AI Model",
-                available_models,
-                index=available_models.index(st.session_state.current_model) 
-                    if st.session_state.current_model in available_models else 0
-            )
-        else:
-            st.warning("Please configure at least one API key")
-        
-        # Clear history button
-        if st.button("🗑️ Clear History"):
-            st.session_state.chatbot.clear_history(st.session_state.current_model)
-            st.success(f"Cleared {st.session_state.current_model.upper()} history")
+                st.warning("Please configure at least one API key")
+            
+            # Clear history button
+            if st.button("🗑️ Clear History"):
+                st.session_state.chatbot.clear_history(st.session_state.current_model)
+                st.success(f"Cleared {st.session_state.current_model.upper()} history")
     
-    # Main chat interface
-    st.subheader(f"💬 Chatting with: {st.session_state.current_model.upper()}")
-    
-    # Display chat history
-    history = st.session_state.chatbot.get_history(st.session_state.current_model)
-    
-    chat_container = st.container()
-    with chat_container:
-        for msg in history:
-            if msg['role'] == 'user':
-                st.chat_message("user").write(msg['content'])
-            else:
-                st.chat_message("assistant").write(msg['content'])
-    
-    # Chat input
-    user_input = st.chat_input("Type your message here...")
-    
-    if user_input:
-        # Display user message
-        st.chat_message("user").write(user_input)
+    with col2:
+        # Chat interface
+        st.markdown(f"""
+        <div class='glass-card'>
+            <div class='section-title'>
+                <span class='section-icon'>💬</span>
+                Chatting with: {st.session_state.current_model.upper()}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Get AI response
-        with st.spinner(f"Waiting for {st.session_state.current_model.upper()}..."):
-            response = st.session_state.chatbot.chat(
-                st.session_state.current_model,
-                user_input
-            )
+        # Display chat history
+        history = st.session_state.chatbot.get_history(st.session_state.current_model)
         
-        # Display assistant response
-        st.chat_message("assistant").write(response)
+        chat_container = st.container()
+        with chat_container:
+            for msg in history:
+                if msg['role'] == 'user':
+                    st.markdown(f"<div class='user-message'><strong>You:</strong> {msg['content']}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='assistant-message'><strong>AI:</strong> {msg['content']}</div>", unsafe_allow_html=True)
         
-        # Rerun to update chat display
-        st.rerun()
+        # Chat input
+        user_input = st.chat_input("Type your message here...")
+        
+        if user_input:
+            # Display user message
+            st.markdown(f"<div class='user-message'><strong>You:</strong> {user_input}</div>", unsafe_allow_html=True)
+            
+            # Get AI response
+            with st.spinner(f"Waiting for {st.session_state.current_model.upper()}..."):
+                response = st.session_state.chatbot.chat(
+                    st.session_state.current_model,
+                    user_input
+                )
+            
+            # Display assistant response
+            st.markdown(f"<div class='assistant-message'><strong>AI:</strong> {response}</div>", unsafe_allow_html=True)
+            
+            # Rerun to update chat display
+            st.rerun()
 
 
 if __name__ == "__main__":
